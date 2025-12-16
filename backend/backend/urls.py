@@ -25,5 +25,7 @@ urlpatterns = [
     # Frontend routes
     path("auth/login", TemplateView.as_view(template_name="index.html")),
     path("profile", TemplateView.as_view(template_name="index.html")),
-    path("", RedirectView.as_view(url="/auth/login")),
+    # Redirect root to the frontend profile route so users see the profile
+    # page immediately when visiting the site (frontend-only view).
+    path("", RedirectView.as_view(url="/profile")),
 ]

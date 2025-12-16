@@ -58,7 +58,10 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / '../frontend/dist'],
+        # Look for an already-built SPA in `frontend/dist`, but fall back to
+        # the raw `frontend` folder during development so `index.html` is found
+        # when the frontend hasn't been built.
+        'DIRS': [BASE_DIR / '../frontend/dist', BASE_DIR / '../frontend'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -120,7 +123,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [
+    # Serve static files from the built frontend when available, but
+    # include the unbuilt frontend folder as a development fallback.
     BASE_DIR / '../frontend/dist',
+    BASE_DIR / '../frontend',
 ]
 
 # Default primary key field type
