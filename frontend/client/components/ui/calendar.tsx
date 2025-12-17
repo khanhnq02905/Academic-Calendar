@@ -51,6 +51,11 @@ function Calendar({
         day_hidden: "invisible",
         ...classNames,
       }}
+      // provide a default formatter for weekday names: use the locale 'narrow' weekday
+      // which typically returns a single character (S, M, T, ...).
+      formatters={{
+        weekdayName: (date: Date) => date.toLocaleDateString(undefined, { weekday: "narrow" }),
+      }}
       components={{
         Chevron: (props) => {
           if (props.orientation === "left") {

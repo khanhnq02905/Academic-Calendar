@@ -11,7 +11,7 @@ export default defineConfig({
   build: {
     outDir: "dist",
   },
-  base: "/static/",
+  base: "/",
   plugins: [react()],
   resolve: {
     alias: {
