@@ -10,7 +10,6 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 import Profile from "./pages/Profile";
-import EditProfile from "./pages/EditProfile";
 import EditProfileStudent from "./pages/EditProfile-Student";
 import CalendarPage from "./pages/Calendar";
 import CreateEvents from "./pages/CreateEvents";
@@ -30,7 +29,6 @@ const App = () => (
           <Route path="/" element={<Navigate to="/auth/login" replace />} />
           <Route path="/auth/login" element={<Index />} />
           <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
-          <Route path="/edit-profile" element={<RequireAuth><EditProfile /></RequireAuth>} />
           <Route path="/profile/student" element={<RequireAuth><EditProfileStudent /></RequireAuth>} />
           <Route path="/calendar" element={<RequireAuth><CalendarPage /></RequireAuth>} />
           <Route
