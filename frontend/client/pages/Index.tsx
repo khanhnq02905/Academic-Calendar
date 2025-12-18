@@ -37,13 +37,20 @@ type SignInFormValues = z.infer<typeof signInSchema>;
 type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 
 import { useNavigate } from "react-router-dom";
-import { saveLocalProfile } from "@/lib/profileService";
+import { saveLocalProfile, getProfile } from "@/lib/profileService";
 
 // API base (use Vite env var in development or default to local Django)
 const API = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 
 export default function Index() {
   const navigate = useNavigate();
+  // if already authenticated, redirect to profile
+  (async () => {
+    try {
+      const p = await getProfile();
+      if (p) navigate('/profile');
+    } catch {}
+  })();
   const [showPassword, setShowPassword] = useState(false);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);

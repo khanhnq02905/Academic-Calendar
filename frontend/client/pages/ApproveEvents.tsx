@@ -8,11 +8,26 @@ export default function ApproveEvents() {
   const [events, setEvents] = useState<Array<any>>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigate = useNavigate();
+  const API_BASE = (import.meta as any).env.VITE_API_BASE || "http://localhost:8000";
 
   useEffect(() => {
-    const raw = localStorage.getItem("events");
-    const arr = raw ? JSON.parse(raw) : [];
-    setEvents(arr);
+    let mounted = true;
+    const load = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/calendar/scheduledevents/`);
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const data = await res.json();
+        const arr = Array.isArray(data) ? data : (data.results || []);
+        if (mounted) setEvents(arr);
+      } catch (err) {
+        // fallback to localStorage if backend not available
+        const raw = localStorage.getItem("events");
+        const arr = raw ? JSON.parse(raw) : [];
+        if (mounted) setEvents(arr);
+      }
+    };
+    load();
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
@@ -25,16 +40,38 @@ export default function ApproveEvents() {
     return () => window.removeEventListener("events:changed", handler);
   }, []);
 
-  const updateStatus = (id: number, status: string) => {
-    const raw = localStorage.getItem("events");
-    const arr = raw ? JSON.parse(raw) : [];
-    const newArr = arr.map((e: any) => (e.id === id ? { ...e, status } : e));
-    localStorage.setItem("events", JSON.stringify(newArr));
-    setEvents(newArr);
+  const updateStatus = async (id: number, status: string) => {
+    const token = localStorage.getItem("accessToken");
+    // optimistic local update
+    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, status } : e)));
     try {
-      window.dispatchEvent(new Event("events:changed"));
+      if (!token) throw new Error("No auth token");
+      const res = await fetch(`${API_BASE}/calendar/${status === 'approved' ? 'approve' : 'reject'}/${id}/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        throw new Error(`${res.status} ${res.statusText}`);
+      }
+      // refresh list from server
+      const fresh = await fetch(`${API_BASE}/calendar/scheduledevents/`);
+      if (fresh.ok) {
+        const d = await fresh.json();
+        const arr = Array.isArray(d) ? d : (d.results || []);
+        setEvents(arr);
+        try { window.dispatchEvent(new Event("events:changed")); } catch {}
+      }
     } catch (err) {
-      /* ignore */
+      console.error("Failed to update status on server, falling back to localStorage:", err);
+      // fallback: persist to localStorage
+      const raw = localStorage.getItem("events");
+      const arr = raw ? JSON.parse(raw) : [];
+      const newArr = arr.map((e: any) => (e.id === id ? { ...e, status } : e));
+      localStorage.setItem("events", JSON.stringify(newArr));
+      setEvents(newArr);
+      try { window.dispatchEvent(new Event("events:changed")); } catch {}
     }
   };
 
