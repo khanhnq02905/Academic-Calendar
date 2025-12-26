@@ -4,8 +4,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q
 from django.contrib.auth import get_user_model
-from .models import ScheduledEvent, Course, Room
-from .serializers import ScheduledEventSerializer
+from .models import ScheduledEvent, Course, Room, AuditLog
+from .serializers import ScheduledEventSerializer, AuditLogSerializer
+from users.models import StudentProfile
 import datetime
 import logging
 
@@ -150,6 +151,12 @@ def create_event(request):
     if serializer.is_valid():
         serializer.save()
         logger.info(f"ScheduledEvent created: id={serializer.instance.id}, title={serializer.instance.title}, course={course.id}, tutor={tutor.id}, date={date_obj}, start={start_time}, end={end_time}, room={room.id if room else None}")
+        # Create audit log for event creation
+        try:
+            AuditLog.objects.create(user=request.user, action='createEvent', event=serializer.instance)
+            logger.info(f"Audit log created for event creation: event_id={serializer.instance.id}, user={request.user.id}")
+        except Exception as e:
+            logger.exception(f"Failed to create audit log for event creation: {e}")
         return Response(serializer.data, status=201)
     else:
         logger.warning(f"ScheduledEvent serializer errors: {serializer.errors}")
@@ -170,6 +177,13 @@ def approve_event(request, event_id):
 
     event.status = "approved"
     event.save()
+
+    # Create audit log for event approval
+    try:
+        AuditLog.objects.create(user=request.user, action='approveEvent', event=event)
+        logger.info(f"Audit log created for event approval: event_id={event.id}, user={request.user.id}")
+    except Exception as e:
+        logger.exception(f"Failed to create audit log for event approval: {e}")
 
     return Response({"message": "Event approved"})
 
@@ -298,10 +312,34 @@ def rooms_available(request):
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def scheduledevents_list(request):
-    """Public: return all scheduled events (no auth)."""
+    """Return scheduled events filtered by user's role and profile."""
+    user = request.user
+    logger.info(f"scheduledevents_list called by user: {user}, authenticated: {user.is_authenticated}, role: {getattr(user, 'role', None)}")
+    
+    # Base queryset
     qs = ScheduledEvent.objects.all().order_by('date', 'start_time')
+    
+    # If user is a student, filter by their major and year
+    if user.role == "student":
+        try:
+            student_profile = StudentProfile.objects.get(user=user)
+            logger.info(f"Student profile found: major={student_profile.major}, year={student_profile.year}")
+            if student_profile.major and student_profile.year:
+                qs = qs.filter(
+                    course__major=student_profile.major,
+                    course__year=student_profile.year
+                )
+                logger.info(f"Filtered events for student: {qs.count()} events")
+        except StudentProfile.DoesNotExist:
+            logger.warning(f"No student profile found for user {user}")
+            # If no profile, return no events for safety
+            qs = qs.none()
+    
+    # For all other roles (tutor, academic_assistant, department_assistant, administrator), return all events
+    logger.info(f"Returning {qs.count()} events for user {user}")
+    
     serializer = ScheduledEventSerializer(qs, many=True)
     return Response(serializer.data)
 
@@ -390,3 +428,14 @@ def export_calendar(request):
         ])
 
     return response
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_audit_logs(request):
+    # Only administrators can view audit logs
+    if request.user.role != "administrator":
+        return Response({"detail": "Not found."}, status=404)
+    logs = AuditLog.objects.all().order_by("-timestamp")
+    serializer = AuditLogSerializer(logs, many=True)
+    return Response(serializer.data)

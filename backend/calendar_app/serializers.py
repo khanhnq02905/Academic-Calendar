@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ScheduledEvent, Course, Room
+from .models import ScheduledEvent, Course, Room, AuditLog
 from django.contrib.auth import get_user_model
 
 User = get_user_model()
@@ -40,3 +40,18 @@ class ScheduledEventSerializer(serializers.ModelSerializer):
             return getattr(u, 'name', None) or getattr(u, 'username', None) or getattr(u, 'email', None)
         except Exception:
             return None
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    user_email = serializers.SerializerMethodField()
+    event_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AuditLog
+        fields = ['id', 'user_email', 'action', 'event_details', 'timestamp']
+
+    def get_user_email(self, obj):
+        return obj.user.email or obj.user.username
+
+    def get_event_details(self, obj):
+        return f"Course: {obj.event.course.name}, Time: {obj.event.date} {obj.event.start_time}"

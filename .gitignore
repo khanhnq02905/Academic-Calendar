@@ -8,7 +8,7 @@ venv/
 # Django
 db.sqlite3
 *.log
-
+backend/calendar_app/migrations/
 # React / Node
 node_modules/
 frontend/dist/

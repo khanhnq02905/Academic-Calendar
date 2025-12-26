@@ -14,4 +14,6 @@ urlpatterns = [
     path("events/", views.events_fallback),
     path("create_event/", views.create_event),
     path("export/", views.export_calendar),
+    # Audit logs
+    path("audit/logs/", views.get_audit_logs),
 ]

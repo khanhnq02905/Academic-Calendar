@@ -14,6 +14,7 @@ import EditProfileStudent from "./pages/EditProfile-Student";
 import CalendarPage from "./pages/Calendar";
 import CreateEvents from "./pages/CreateEvents";
 import ApproveEvents from "./pages/ApproveEvents";
+import AuditTrail from "./pages/AuditTrail";
 import RequireAuth from "./components/RequireAuth";
 import RequireRole from "./components/RequireRole";
 
@@ -47,6 +48,16 @@ const App = () => (
               <RequireAuth>
                 <RequireRole roles={["department_assistant", "administrator"]}>
                   <ApproveEvents />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/audit"
+            element={
+              <RequireAuth>
+                <RequireRole roles={["department_assistant","administrator"]}>
+                  <AuditTrail />
                 </RequireRole>
               </RequireAuth>
             }
