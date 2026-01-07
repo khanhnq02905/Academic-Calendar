@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { getLocalProfile } from "@/lib/profileService";
 import { formatDateLocal } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight, CalendarIcon, Bell, User } from "lucide-react";
 import DashboardBanner from "@/components/ui/dashboard-banner";
 import { useNavigate } from "react-router-dom";
@@ -49,6 +50,8 @@ export default function CalendarPage() {
   });
   const [selected, setSelected] = useState<Date | undefined>(undefined);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [selectedLecturer, setSelectedLecturer] = useState<string | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +70,15 @@ export default function CalendarPage() {
       setExportEnd(formatDateLocal(end));
     }
   }, [exportOpen]);
+
+  // Derived lists and filtered events
+  const lecturers: string[] = Array.from(new Set(events.map((e) => e.tutor_name).filter((x): x is string => !!x)));
+  const courses: string[] = Array.from(new Set(events.map((e) => e.course_name).filter((x): x is string => !!x)));
+  const filteredEvents = events.filter((e) => {
+    if (selectedLecturer && e.tutor_name !== selectedLecturer) return false;
+    if (selectedCourse && e.course_name !== selectedCourse) return false;
+    return true;
+  });
 
   const handleExport = async () => {
     if (!exportStart || !exportEnd) {
@@ -192,18 +204,14 @@ export default function CalendarPage() {
         <div className="flex gap-6 flex-1 min-h-0">
           <div className={`${viewMode === 'week' ? 'w-full' : 'w-2/3'} flex flex-col min-h-0`}>
             <div className="flex items-center justify-between mb-4 px-2">
-              <div className="flex items-center gap-2">
-                <Button variant={viewMode==='month'?'ghost':'outline'} size="sm" onClick={() => setViewMode('month')}>Month</Button>
-                <Button variant={viewMode==='week'?'ghost':'outline'} size="sm" onClick={() => { setViewMode('week'); const now = new Date(); const s = new Date(now); s.setDate(now.getDate() - now.getDay()); s.setHours(0,0,0,0); setWeekStart(s); }}>Week</Button>
-              </div>
               <div className="flex items-center gap-4">
                 {viewMode === 'month' ? (
                   <>
                     <Button variant="ghost" onClick={() => setDisplayMonth(new Date(displayMonth.getFullYear(), displayMonth.getMonth() - 1, 1))}>
                       <ChevronLeft />
                     </Button>
-                    <div className="px-3 text-sm font-medium">
-                      {displayMonth.toLocaleString(undefined, { month: "long" })} {displayMonth.getFullYear()}
+                    <div className="px-3 text-sm font-medium whitespace-nowrap">
+                      {displayMonth.toLocaleString('en-US', { month: "long" })} {displayMonth.getFullYear()}
                     </div>
                     <Button variant="ghost" onClick={() => setDisplayMonth(new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 1))}>
                       <ChevronRight />
@@ -223,7 +231,51 @@ export default function CalendarPage() {
                   </>
                 )}
               </div>
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-2">
+                <Select value={selectedLecturer ?? "__all__"} onValueChange={(v) => setSelectedLecturer(v === "__all__" ? null : v)}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="All Lecturers" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Lecturers</SelectItem>
+                    {lecturers.map((l) => (
+                      <SelectItem key={l} value={l}>{l}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={selectedCourse ?? "__all__"} onValueChange={(v) => setSelectedCourse(v === "__all__" ? null : v)}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue placeholder="All Courses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All Courses</SelectItem>
+                    {courses.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={viewMode} onValueChange={(value: 'month' | 'week') => {
+                  if (value === 'month') {
+                    setViewMode('month');
+                  } else {
+                    setViewMode('week');
+                    const now = new Date();
+                    const s = new Date(now);
+                    s.setDate(now.getDate() - now.getDay());
+                    s.setHours(0,0,0,0);
+                    setWeekStart(s);
+                  }
+                }}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">Month</SelectItem>
+                  <SelectItem value="week">Week</SelectItem>
+                </SelectContent>
+                </Select>
                 <Dialog open={exportOpen} onOpenChange={setExportOpen}>
                   <DialogTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -294,7 +346,7 @@ export default function CalendarPage() {
                         {weeks.flat().map((day, idx) => {
                           const isCurrentMonth = day.getMonth() === displayMonth.getMonth();
                           const dayStr = formatDateLocal(day);
-                          const eventsForDay = events.filter((ev) => ev && ev.date === dayStr && ev.status !== 'rejected');
+                          const eventsForDay = filteredEvents.filter((ev) => ev && ev.date === dayStr && ev.status !== 'rejected');
                           const isSelected = selected && formatDateLocal(selected) === dayStr;
                           return (
                             <button
@@ -360,7 +412,7 @@ export default function CalendarPage() {
                         <div className="flex-1 grid grid-cols-7 gap-2 overflow-auto">
                           {days.map((d) => {
                             const dayStr = formatDateLocal(d);
-                            const dayEvents = events.filter((ev) => ev && ev.date === dayStr && ev.status !== 'rejected');
+                            const dayEvents = filteredEvents.filter((ev) => ev && ev.date === dayStr && ev.status !== 'rejected');
                             return (
                               <div key={dayStr} className="relative bg-white border rounded-md" style={{ minHeight: containerHeight }}>
                                 <div style={{ position: 'relative', height: containerHeight }}>
@@ -431,7 +483,7 @@ export default function CalendarPage() {
                   {selected ? (
                     (() => {
                       const dayStr = formatDateLocal(selected as Date);
-                      const list = events.filter((e) => e.date === dayStr);
+                      const list = filteredEvents.filter((e) => e.date === dayStr);
                       if (list.length === 0) return <div className="text-sm text-gray-500">No events for this date.</div>;
                       return (
                         <div className="space-y-3">
