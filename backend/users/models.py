@@ -39,6 +39,8 @@ class StudentProfile(models.Model):
     # link student's major to Major model in calendar_app; allow null to ease migrations and optional students
     major = models.ForeignKey('calendar_app.Major', on_delete=models.SET_NULL, null=True, blank=True, related_name="students")
     year = models.PositiveSmallIntegerField()
+    # whether the student is eligible to advance to the next year
+    can_advance = models.BooleanField(default=True)
 
     def save(self, *args, **kwargs):
         if not self.user_id:  # If no user assigned yet

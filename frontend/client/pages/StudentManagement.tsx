@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/components/ui/use-toast";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
@@ -14,8 +15,11 @@ const StudentManagement: React.FC = () => {
   const [majors, setMajors] = useState<any[]>([]);
   const [filterYear, setFilterYear] = useState<number | null>(null);
   const [filterMajor, setFilterMajor] = useState<number | null>(null);
+  const [query, setQuery] = useState<string>("");
+  const searchTimer = React.useRef<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  const fetchPage = async (p: number, opts?: { year?: number | null; major?: number | null }) => {
+  const fetchPage = async (p: number, opts?: { year?: number | null; major?: number | null; q?: string | null }) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("accessToken");
@@ -26,8 +30,10 @@ const StudentManagement: React.FC = () => {
       params.set('page', String(p));
       const yearVal = opts && Object.prototype.hasOwnProperty.call(opts, 'year') ? opts!.year : filterYear;
       const majorVal = opts && Object.prototype.hasOwnProperty.call(opts, 'major') ? opts!.major : filterMajor;
+      const qVal = opts && Object.prototype.hasOwnProperty.call(opts, 'q') ? opts!.q : query;
       if (yearVal) params.set('year', String(yearVal));
       if (majorVal) params.set('major', String(majorVal));
+      if (qVal) params.set('q', String(qVal));
       const res = await fetch(`${API_BASE}/api/users/students/?${params.toString()}`, { headers });
       const data = await res.json();
       if (res.ok) {
@@ -61,7 +67,56 @@ const StudentManagement: React.FC = () => {
     })();
   }, []);
 
+  // trigger search with debounce
+  const onQueryChange = (v: string) => {
+    setQuery(v);
+    if (searchTimer.current) window.clearTimeout(searchTimer.current);
+    // debounce 350ms
+    searchTimer.current = window.setTimeout(() => {
+      fetchPage(1, { year: filterYear, major: filterMajor, q: v || null });
+    }, 350) as unknown as number;
+  };
+
   const totalPages = Math.max(1, Math.ceil(count / pageSize));
+
+  const toggleSelectAll = () => {
+    const visibleIds = students.map((s) => s.id);
+    const allSelected = visibleIds.every((id) => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds(selectedIds.filter((id) => !visibleIds.includes(id)));
+    } else {
+      // add visible ids that are not already selected
+      const next = Array.from(new Set([...selectedIds, ...visibleIds]));
+      setSelectedIds(next);
+    }
+  };
+
+  const toggleSelectOne = (id: number) => {
+    if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter((x) => x !== id));
+    else setSelectedIds([...selectedIds, id]);
+  };
+
+  const promoteSelected = async () => {
+    if (!selectedIds.length) return;
+    if (!confirm(`Promote ${selectedIds.length} selected students by one year?`)) return;
+    try {
+      const token = localStorage.getItem("accessToken");
+      const headers: any = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/api/users/students/bulk-promote/`, { method: 'POST', headers, body: JSON.stringify({ student_ids: selectedIds }) });
+      const data = await res.json();
+      if (res.ok) {
+        toast({ title: `Promoted ${data.updated || 0} students`, description: `${(data.promoted_ids || []).length} promoted, ${(data.skipped || []).length} skipped` });
+        setSelectedIds([]);
+        fetchPage(page);
+      } else {
+        toast({ title: 'Promotion failed', description: JSON.stringify(data) });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Promotion error', description: String(err) });
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans text-gray-900">
@@ -75,6 +130,15 @@ const StudentManagement: React.FC = () => {
             </div>
 
             <div className="flex gap-3 items-center mb-4">
+              <div>
+                <label className="text-sm">Search</label>
+                <input
+                  placeholder="Search by name or student ID"
+                  className="ml-2 rounded-md border border-gray-200 px-2 py-1"
+                  value={query}
+                  onChange={(e) => onQueryChange(e.target.value)}
+                />
+              </div>
               <div>
                 <label className="text-sm">Year</label>
                 <select className="ml-2 rounded-md border border-gray-200 px-2 py-1" value={filterYear ?? ''} onChange={(e) => { const val = e.target.value ? Number(e.target.value) : null; setFilterYear(val); fetchPage(1, { year: val }); }}>
@@ -102,6 +166,9 @@ const StudentManagement: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>
+                      <input type="checkbox" checked={students.length > 0 && students.every(s => selectedIds.includes(s.id))} onChange={toggleSelectAll} />
+                    </TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Student ID</TableHead>
@@ -112,11 +179,16 @@ const StudentManagement: React.FC = () => {
                 <TableBody>
                   {students.map((s: any) => (
                     <TableRow key={s.id}>
+                      <TableCell>
+                        <input type="checkbox" checked={selectedIds.includes(s.id)} onChange={() => toggleSelectOne(s.id)} />
+                      </TableCell>
                       <TableCell>{s.name}</TableCell>
                       <TableCell>{s.email}</TableCell>
                       <TableCell>{s.student_id}</TableCell>
                       <TableCell>{s.major ? s.major.name || s.major : <span className="text-muted-foreground">-</span>}</TableCell>
-                      <TableCell>{s.year}</TableCell>
+                      <TableCell>
+                        {s.year} {s.can_advance === false && <span className="ml-2 text-xs text-red-600">(cannot advance)</span>}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -126,6 +198,7 @@ const StudentManagement: React.FC = () => {
             <div className="mt-4 flex items-center justify-between">
               <div className="text-sm text-gray-600">{count} students — page {page} of {totalPages}</div>
               <div className="flex items-center gap-2">
+                <Button variant="default" disabled={!selectedIds.length} onClick={promoteSelected}>Promote selected</Button>
                 <Button variant="outline" disabled={page <= 1 || loading} onClick={() => fetchPage(page - 1)}>Previous</Button>
                 <Button variant="outline" disabled={page >= totalPages || loading} onClick={() => fetchPage(page + 1)}>Next</Button>
               </div>

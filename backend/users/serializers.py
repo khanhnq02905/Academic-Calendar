@@ -14,10 +14,12 @@ class StudentProfileSerializer(serializers.ModelSerializer):
     major = serializers.SerializerMethodField()
     # allow writing major by id when creating/updating
     major_id = serializers.PrimaryKeyRelatedField(queryset=Major.objects.all(), source='major', write_only=True, required=False, allow_null=True)
+    # indicate whether this student is eligible to advance
+    can_advance = serializers.BooleanField(required=False)
     class Meta:
         model = StudentProfile
         # accept user as optional; save() will create the user if missing
-        fields = ("id", "user", "name", "email", "dob", "student_id", "major", "major_id", "year")
+        fields = ("id", "user", "name", "email", "dob", "student_id", "major", "major_id", "year", "can_advance")
         read_only_fields = ("id",)
 
     def create(self, validated_data):

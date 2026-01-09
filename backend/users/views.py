@@ -13,6 +13,7 @@ from .permissions import IsDAAOrAdminOrHasModelPerm
 from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
+from django.db.models import F
 
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
@@ -268,4 +269,49 @@ class MajorListView(APIView):
 		majors = Major.objects.all().order_by('name')
 		data = [{"id": m.id, "name": m.name} for m in majors]
 		return Response(data)
+
+
+class BulkPromoteView(APIView):
+	"""Bulk promote selected students by one year, excluding those who cannot advance.
+
+	POST body: { "student_ids": [1,2,3] }
+	Response: { updated: <count>, promoted_ids: [...], skipped: [{id, reason}] }
+	"""
+	permission_classes = (IsDAAOrAdminOrHasModelPerm,)
+
+	def post(self, request):
+		data = request.data or {}
+		ids = data.get('student_ids') or []
+		if not isinstance(ids, (list, tuple)):
+			return Response({"error": "student_ids must be a list"}, status=status.HTTP_400_BAD_REQUEST)
+
+		MAX_YEAR = 4
+		# find eligible: in ids, year < MAX_YEAR, can_advance True
+		eligible_qs = StudentProfile.objects.filter(id__in=ids, year__lt=MAX_YEAR, can_advance=True)
+		eligible_ids = list(eligible_qs.values_list('id', flat=True))
+
+		# update by incrementing year
+		updated_count = eligible_qs.update(year=F('year') + 1)
+
+		promoted_ids = eligible_ids
+
+		# compute skipped with reasons
+		skipped = []
+		for sid in ids:
+			if sid in promoted_ids:
+				continue
+			try:
+				sp = StudentProfile.objects.get(id=sid)
+				reason = None
+				if not sp.can_advance:
+					reason = 'not allowed to advance'
+				elif sp.year >= MAX_YEAR:
+					reason = 'already at max year'
+				else:
+					reason = 'unknown reason'
+			except StudentProfile.DoesNotExist:
+				reason = 'not found'
+			skipped.append({"id": sid, "reason": reason})
+
+		return Response({"updated": updated_count, "promoted_ids": promoted_ids, "skipped": skipped})
 
