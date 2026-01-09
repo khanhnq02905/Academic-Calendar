@@ -45,7 +45,7 @@ export default function CalendarPage() {
     const now = new Date();
     const s = new Date(now);
     s.setDate(now.getDate() - now.getDay()); // start on Sunday
-    s.setHours(0,0,0,0);
+    s.setHours(0, 0, 0, 0);
     return s;
   });
   const [selected, setSelected] = useState<Date | undefined>(undefined);
@@ -59,6 +59,13 @@ export default function CalendarPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exportStart, setExportStart] = useState("");
   const [exportEnd, setExportEnd] = useState("");
+
+  // Time Filter state
+  const [filterStartHour, setFilterStartHour] = useState("");
+  const [filterStartMin, setFilterStartMin] = useState("");
+  const [filterEndHour, setFilterEndHour] = useState("");
+  const [filterEndMin, setFilterEndMin] = useState("");
+
 
   // Set default export dates when opening (start/end of current month)
   useEffect(() => {
@@ -77,8 +84,44 @@ export default function CalendarPage() {
   const filteredEvents = events.filter((e) => {
     if (selectedLecturer && e.tutor_name !== selectedLecturer) return false;
     if (selectedCourse && e.course_name !== selectedCourse) return false;
+
+    // Time Filter Logic
+    if (filterStartHour || filterEndHour) { // Only filter if at least one hour is specified
+      const parseTime = (t: string | undefined): number => {
+        if (!t) return 0;
+        const [hh, mm] = t.split(':').map(x => parseInt(x, 10));
+        return (hh * 60) + (mm || 0);
+      };
+      const eventStart = parseTime(e.start_time);
+      const eventEnd = parseTime(e.end_time || e.start_time); // fallback if end is missing? usually required.
+
+      // Determine Filter Range
+      let fStart = 0;   // default 00:00
+      let fEnd = 1439;  // default 23:59 (24*60 - 1)
+
+      if (filterStartHour) {
+        const h = parseInt(filterStartHour, 10) || 0;
+        const m = parseInt(filterStartMin, 10) || 0;
+        fStart = h * 60 + m;
+      }
+
+      if (filterEndHour) {
+        const h = parseInt(filterEndHour, 10) || 0;
+        const m = parseInt(filterEndMin, 10) || 0;
+        fEnd = h * 60 + m;
+      }
+
+      // Logic: Event START is in range OR Event END is in range
+      // "Show events that either ends in the period or starts in the period"
+      const startInRange = eventStart >= fStart && eventStart <= fEnd;
+      const endInRange = eventEnd >= fStart && eventEnd <= fEnd;
+
+      if (!startInRange && !endInRange) return false;
+    }
+
     return true;
   });
+
 
   const handleExport = async () => {
     if (!exportStart || !exportEnd) {
@@ -190,7 +233,7 @@ export default function CalendarPage() {
           const token = localStorage.getItem("accessToken");
           const headers: any = {};
           if (token) headers.Authorization = `Bearer ${token}`;
-          
+
           const res2 = await fetch(`${API_BASE}/api/calendar/events/`, { headers });
           if (res2.ok) {
             const d2 = await res2.json();
@@ -266,7 +309,48 @@ export default function CalendarPage() {
                   </SelectContent>
                 </Select>
 
+                {/* Time Filter Inputs */}
+                <div className="flex items-center gap-2 bg-white p-1 rounded-md border border-gray-200 shadow-sm ml-2">
+                  <span className="text-xs font-medium text-gray-500 px-1">Time:</span>
+                  <div className="flex items-center">
+                    <Input
+                      className="w-12 h-8 text-center p-1"
+                      placeholder="HH"
+                      maxLength={2}
+                      value={filterStartHour}
+                      onChange={e => setFilterStartHour(e.target.value)}
+                    />
+                    <span className="mx-1">:</span>
+                    <Input
+                      className="w-12 h-8 text-center p-1"
+                      placeholder="MM"
+                      maxLength={2}
+                      value={filterStartMin}
+                      onChange={e => setFilterStartMin(e.target.value)}
+                    />
+                  </div>
+                  <span className="text-gray-400">-</span>
+                  <div className="flex items-center">
+                    <Input
+                      className="w-12 h-8 text-center p-1"
+                      placeholder="HH"
+                      maxLength={2}
+                      value={filterEndHour}
+                      onChange={e => setFilterEndHour(e.target.value)}
+                    />
+                    <span className="mx-1">:</span>
+                    <Input
+                      className="w-12 h-8 text-center p-1"
+                      placeholder="MM"
+                      maxLength={2}
+                      value={filterEndMin}
+                      onChange={e => setFilterEndMin(e.target.value)}
+                    />
+                  </div>
+                </div>
+
                 <Select value={viewMode} onValueChange={(value: 'month' | 'week') => {
+
                   if (value === 'month') {
                     setViewMode('month');
                   } else {
@@ -274,17 +358,17 @@ export default function CalendarPage() {
                     const now = new Date();
                     const s = new Date(now);
                     s.setDate(now.getDate() - now.getDay());
-                    s.setHours(0,0,0,0);
+                    s.setHours(0, 0, 0, 0);
                     setWeekStart(s);
                   }
                 }}>
-                <SelectTrigger className="w-[100px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="month">Month</SelectItem>
-                  <SelectItem value="week">Week</SelectItem>
-                </SelectContent>
+                  <SelectTrigger className="w-[100px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="month">Month</SelectItem>
+                    <SelectItem value="week">Week</SelectItem>
+                  </SelectContent>
                 </Select>
                 <Dialog open={exportOpen} onOpenChange={setExportOpen}>
                   <DialogTrigger asChild>
@@ -424,7 +508,7 @@ export default function CalendarPage() {
                               const h = startHour + i;
                               return (
                                 <div key={i} className="h-16 border-t border-gray-100 flex items-start pr-1" style={{ height: 60 }}>
-                                  <div className="text-xs text-right w-full pr-2">{String(h).padStart(2,'0')}:00</div>
+                                  <div className="text-xs text-right w-full pr-2">{String(h).padStart(2, '0')}:00</div>
                                 </div>
                               );
                             })}
