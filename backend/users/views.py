@@ -7,7 +7,7 @@ from rest_framework.pagination import PageNumberPagination
 from django.db import models
 
 from .models import StudentProfile
-from calendar_app.models import Major
+from calendar_app.models import Major, AuditLog
 from .serializers import StudentProfileSerializer, UserSerializer
 from .permissions import IsDAAOrAdminOrHasModelPerm
 from rest_framework.permissions import IsAuthenticated
@@ -36,7 +36,21 @@ class StudentProfileCreateView(generics.CreateAPIView):
 	permission_classes = (IsDAAOrAdminOrHasModelPerm,)
 
 	def create(self, request, *args, **kwargs):
-		return super().create(request, *args, **kwargs)
+			resp = super().create(request, *args, **kwargs)
+			# create audit log for created student
+			try:
+				# serializer saved instance is available on response data id; fetch profile
+				created_id = resp.data.get('id') if isinstance(resp.data, dict) else None
+				if created_id:
+					sp = StudentProfile.objects.filter(id=created_id).first()
+					if sp:
+						try:
+							AuditLog.objects.create(user=request.user, action='createStudent', student=sp)
+						except Exception:
+							pass
+			except Exception:
+				pass
+			return resp
 
 
 class StudentImportView(APIView):
@@ -211,11 +225,20 @@ class StudentImportView(APIView):
 						pass
 
 					profile = StudentProfile.objects.create(**profile_kwargs)
+					profile = StudentProfile.objects.create(**profile_kwargs)
+					created.append({"row": idx, "student_id": profile.student_id, "username": user.username})
 					created.append({"row": idx, "student_id": profile.student_id, "username": user.username})
 			except IntegrityError as ie:
 				errors.append({"row": idx, "error": str(ie)})
 			except Exception as e:
 				errors.append({"row": idx, "error": str(e)})
+
+		# create aggregated audit log for import
+		try:
+			if created:
+				AuditLog.objects.create(user=request.user, action='createStudent', notes=f"Imported {len(created)} students; skipped {len(skipped)}; errors {len(errors)}")
+		except Exception:
+			pass
 
 		# include updated/skipped arrays for frontend summary compatibility
 		return Response({"created": created, "updated": updated, "skipped": skipped, "errors": errors}, status=status.HTTP_200_OK)
@@ -312,6 +335,12 @@ class BulkPromoteView(APIView):
 			except StudentProfile.DoesNotExist:
 				reason = 'not found'
 			skipped.append({"id": sid, "reason": reason})
+
+		# create an aggregated audit log for the promotion operation
+		try:
+			AuditLog.objects.create(user=request.user, action='promoteStudent', notes=f"Promoted {updated_count} students; skipped {len(skipped)}")
+		except Exception:
+			pass
 
 		return Response({"updated": updated_count, "promoted_ids": promoted_ids, "skipped": skipped})
 
