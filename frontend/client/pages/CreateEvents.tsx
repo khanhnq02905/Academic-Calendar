@@ -196,11 +196,28 @@ function CreateEventForm({ onDone }: CreateEventFormProps) {
       }
       setSaved(true);
       try { window.dispatchEvent(new Event('events:changed')); } catch (_) { }
-      setTimeout(() => { if (onDone) onDone(); }, 700);
+      // Stay on page, reset saved state after delay if needed or just let user see success message
+      setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error(err);
       alert('Network error while creating event');
     }
+  };
+
+  const handleCancel = () => {
+    setTitle("");
+    setDate("");
+    setLocation("");
+    setCourse("");
+    setTutor("");
+    setEventType("");
+    setStartHour("");
+    setStartMinute("");
+    setEndHour("");
+    setEndMinute("");
+    setNotes("");
+    setSaved(false);
+    if (onDone) onDone();
   };
 
   return (
@@ -314,7 +331,7 @@ function CreateEventForm({ onDone }: CreateEventFormProps) {
         <button type="submit" disabled={saved} className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition">
           Create & Send to DAA
         </button>
-        <button type="button" onClick={() => { if (onDone) onDone(); }} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md">Cancel</button>
+        <button type="button" onClick={handleCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200">Cancel</button>
       </div>
     </form>
   );
@@ -332,7 +349,8 @@ export default function CreateEvents() {
         <div className="flex gap-6 flex-1 min-h-0">
           <div className="w-2/3 flex flex-col min-h-0">
             <div className="bg-white p-6 rounded-b-2xl shadow flex-1 min-h-0 overflow-auto">
-              <CreateEventForm onDone={() => { window.location.href = '/profile'; }} />
+              {/* Removed redirect to stay on page */}
+              <CreateEventForm />
             </div>
           </div>
 
