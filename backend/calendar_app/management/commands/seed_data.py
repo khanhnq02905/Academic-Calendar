@@ -124,6 +124,7 @@ class Command(BaseCommand):
             room = random.choice(rooms)
             etype = random.choice([choice[0] for choice in ScheduledEvent.EVENT_TYPES])
             title = f"{course.name} {etype.capitalize()}"
+            notes = fake.sentence() if random.random() > 0.5 else None
             se = ScheduledEvent.objects.create(
                 title=title,
                 date=event_date,
@@ -134,8 +135,36 @@ class Command(BaseCommand):
                 room=room,
                 event_type=etype,
                 status=random.choice(["pending", "approved"]),
+                notes=notes,
             )
             events.append(se)
+
+        self.stdout.write("Seeding complete: events created.")
+
+        # Create default accounts if they don't exist
+        self.stdout.write("Creating default accounts...")
+        
+        # Admin
+        if not User.objects.filter(username="admin").exists():
+            User.objects.create_superuser("admin", "admin@example.com", "adminpass")
+            self.stdout.write("Created superuser: admin/admin")
+
+        # DAA (Department Academic Assistant)
+        if not User.objects.filter(username="daa").exists():
+            daa = User.objects.create_user("daa", "daa@example.com", "daapass", role="department_assistant")
+            # Create associated profile if needed (assuming model signals handle it or manual creation)
+            # Check models.py for profile creation logic. unique constraints might apply.
+            # Assuming basic user creation is enough for login, but profiles might be needed for logic.
+            # Let's check models.py: DepartmentAcademicAssistantProfile has one-to-one with user.
+            from users.models import DepartmentAcademicAssistantProfile, AcademicAssistantProfile
+            DepartmentAcademicAssistantProfile.objects.create(user=daa, email="daa@example.com", name="Department Assistant", dassistant_id="DAA001")
+            self.stdout.write("Created DAA: daa/daa")
+
+        # AA (Academic Assistant)
+        if not User.objects.filter(username="aa").exists():
+            aa = User.objects.create_user("aa", "aa@example.com", "aapass", role="academic_assistant")
+            AcademicAssistantProfile.objects.create(user=aa, email="aa@example.com", name="Academic Assistant", assistant_id="AA001")
+            self.stdout.write("Created AA: aa/aa")
 
         self.stdout.write(self.style.SUCCESS(
             f"Seeding complete: {len(majors)} majors, {len(courses)} courses, {len(rooms)} rooms, {len(tutors)} tutors, {len(students)} students, {len(events)} events created."))
