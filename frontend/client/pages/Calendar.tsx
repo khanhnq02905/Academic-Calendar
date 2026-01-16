@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Download } from "lucide-react";
+import { CreateEventForm } from "./CreateEvents"; // Import the form
 
 type EventItem = {
   id: number;
@@ -40,7 +41,11 @@ type EventItem = {
 export default function CalendarPage() {
   const navigate = useNavigate();
   const profile = getLocalProfile();
+
   const isStudent = profile?.role === "student";
+  // Assuming authority means admin or DAA (Department Academic Assistant)
+  // Assuming authority means admin or DAA (Department Academic Assistant)
+  const hasAuthority = ['administrator', 'department_assistant'].includes(profile?.role || '');
   const [displayMonth, setDisplayMonth] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
   const [weekStart, setWeekStart] = useState<Date>(() => {
@@ -57,6 +62,7 @@ export default function CalendarPage() {
   const [selectedEventType, setSelectedEventType] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingEvent, setEditingEvent] = useState<EventItem | null>(null); // State for editing modal
 
   // Export state
   const [exportOpen, setExportOpen] = useState(false);
@@ -215,12 +221,68 @@ export default function CalendarPage() {
     };
     fetchEvents();
     return () => { mounted = false; };
-  }, []);
+  }, [editingEvent]); // Reload events when editing finishes (simple way)
+
+  const handleEditDone = () => {
+    setEditingEvent(null);
+    // Events will reload due to useEffect dependency or we can manually trigger
+    // Actually adding dependency on editingEvent might cause loop if not careful.
+    // Better to just manually call fetch logic or re-trigger effect by a counter.
+    // Ideally refactor fetchEvents out. For now, simple force reload:
+    window.location.reload();
+  };
+
+  const handleApprove = async (eventId: number) => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const headers: any = { "Content-Type": "application/json" };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(`${API_BASE}/api/calendar/approve/${eventId}/`, {
+        method: "POST",
+        headers,
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to approve event");
+      }
+
+      // Optimistically update local state or re-fetch
+      // Let's optimistic update for speed
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId ? { ...e, status: "approved" } : e
+        )
+      );
+      // Also dispatch event for others if needed, but setState is enough for this view
+    } catch (err) {
+      console.error(err);
+      alert("Error approving event");
+    }
+  };
 
   return (
     <div className="flex min-h-screen bg-gray-50 font-sans text-gray-900">
       <Sidebar />
       <main className="flex-1 flex flex-col">
+        {/* Edit Event Modal */}
+        <Dialog open={!!editingEvent} onOpenChange={(open) => !open && setEditingEvent(null)}>
+          <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Event</DialogTitle>
+              <DialogDescription>Update event details below.</DialogDescription>
+            </DialogHeader>
+            <div className="py-4">
+              {editingEvent && (
+                <CreateEventForm
+                  initialData={editingEvent}
+                  onDone={handleEditDone}
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <div className="flex gap-6 flex-1 min-h-0">
           <div className={`${viewMode === 'week' ? 'w-full' : 'w-2/3'} flex flex-col min-h-0 ${loading ? 'relative' : ''}`}>
             <div className="flex items-center justify-between mb-4 px-2">
@@ -565,8 +627,20 @@ export default function CalendarPage() {
                       return (
                         <div className="space-y-3">
                           {list.map((e) => (
-                            <div key={e.id} className="p-4 border border-gray-200 rounded-lg bg-gradient-to-br from-blue-50 to-white hover:shadow-md transition-shadow">
-                              <div className="font-semibold text-gray-900 text-base mb-2">{e.title || e.course_name || `Event ${e.id}`}</div>
+                            <div key={e.id} className="relative p-4 border border-gray-200 rounded-lg bg-gradient-to-br from-blue-50 to-white hover:shadow-md transition-shadow group">
+                              {/* Approve Button for Pending Events */}
+                              {hasAuthority && e.status === 'pending' && (
+                                <div className="absolute top-2 right-2">
+                                  <Button size="sm" variant="outline" className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300 h-6 text-[10px] px-2" onClick={(ev) => {
+                                    ev.stopPropagation(); // prevent card click
+                                    handleApprove(e.id);
+                                  }}>
+                                    Approve
+                                  </Button>
+                                </div>
+                              )}
+
+                              <div className="font-semibold text-gray-900 text-base mb-2 pr-12">{e.title || e.course_name || `Event ${e.id}`}</div>
                               <div className="text-sm text-gray-600 mb-2">
                                 {e.course_name && e.event_type && `${e.course_name} - ${e.event_type}`}
                                 {e.course_name && !e.event_type && e.course_name}
@@ -583,7 +657,15 @@ export default function CalendarPage() {
                                 </div>
                               )}
                               {e.status && <div className={`mt-2 inline-block px-2 py-1 text-xs font-medium rounded-full ${e.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-700'}`}>{e.status}</div>}
-                              {e.status && !['approved', 'rejected'].includes(String(e.status).toLowerCase()) && <div className="mt-2 inline-block px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-700">{e.status}</div>}
+
+                              {/* Edit Event Button for Authorized Users */}
+                              {hasAuthority && (
+                                <div className="mt-3 pt-3 border-t border-blue-100 flex justify-end">
+                                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setEditingEvent(e)}>
+                                    Edit Event
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
