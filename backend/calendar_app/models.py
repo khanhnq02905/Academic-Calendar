@@ -34,7 +34,10 @@ class ScheduledEvent(models.Model):
 
     event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
 
-    status = models.CharField(max_length=20, default="pending")  # pending / approved / rejected
+    status = models.CharField(max_length=20, default="pending")  # pending / approved / rejected / request_change
+
+    # Self-referencing FK to link a Change Request (child) to the Original Event (parent)
+    related_event = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL)
 
     notes = models.TextField(null=True, blank=True)
 
@@ -48,6 +51,9 @@ class AuditLog(models.Model):
         ("approveEvent", "Approve Event"),
         ("createStudent", "Create Student"),
         ("promoteStudent", "Promote Student"),
+        ("editEvent", "Edit Event"),
+        ("cancelEvent", "Cancel Event"),
+        ("rejectEvent", "Reject Event"),
     ]
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     action = models.CharField(max_length=30, choices=ACTIONS)
@@ -57,5 +63,15 @@ class AuditLog(models.Model):
     # optional free-text notes to record aggregate counts or details
 
     def __str__(self):
-        target = self.event or self.student
-        return f"{self.user.username} {self.action} {target}" 
+        target = self.event or "No Target"
+        return f"{self.user.username} {self.action} {target}"
+
+class Notification(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="notifications")
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+    event = models.ForeignKey(ScheduledEvent, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"Notification for {self.user.username}: {self.message[:20]}..." 

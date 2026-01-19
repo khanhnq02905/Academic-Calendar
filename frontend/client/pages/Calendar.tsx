@@ -213,6 +213,7 @@ export default function CalendarPage() {
   const colorForType = (t?: string, status?: string) => {
     // pending events get yellow background
     if (status === 'pending') return { dot: 'bg-yellow-500', block: 'bg-yellow-100 text-yellow-800 border-yellow-200' };
+    if (status === 'request_change') return { dot: 'bg-red-500', block: 'bg-red-100 text-red-800 border-red-200' };
 
     const def = { dot: 'bg-blue-500', block: 'bg-blue-600 text-white' };
     if (!t) return def;
@@ -590,12 +591,14 @@ export default function CalendarPage() {
                                     // If any approved -> show 1 blue dot
                                     // If both -> show both
                                     const hasPending = eventsForDay.some(e => e.status === 'pending');
-                                    const hasApproved = eventsForDay.some(e => e.status !== 'pending' && e.status !== 'rejected');
+                                    const hasApproved = eventsForDay.some(e => e.status !== 'pending' && e.status !== 'rejected' && e.status !== 'request_change');
+                                    const hasRequestChange = eventsForDay.some(e => e.status === 'request_change');
 
                                     return (
                                       <>
                                         {hasPending && <span className="bg-yellow-500 w-3 h-3 rounded-full" title="Pending Events" />}
                                         {hasApproved && <span className="bg-blue-500 w-3 h-3 rounded-full" title="Approved Events" />}
+                                        {hasRequestChange && <span className="bg-red-500 w-3 h-3 rounded-full" title="Change Requests" />}
                                       </>
                                     );
                                   })()}
@@ -730,8 +733,8 @@ export default function CalendarPage() {
                         <div className="space-y-3">
                           {list.map((e) => (
                             <div key={e.id} className="relative p-4 border border-gray-200 rounded-lg bg-gradient-to-br from-blue-50 to-white hover:shadow-md transition-shadow group">
-                              {/* Approve Button for Pending Events */}
-                              {hasAuthority && e.status === 'pending' && (
+                              {/* Approve Button for Pending or Request Change Events */}
+                              {hasAuthority && (e.status === 'pending' || e.status === 'request_change') && (
                                 <div className="absolute top-2 right-2">
                                   <Button size="sm" variant="outline" className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 border-yellow-300 h-6 text-[10px] px-2" onClick={(ev) => {
                                     ev.stopPropagation(); // prevent card click
@@ -758,7 +761,7 @@ export default function CalendarPage() {
                                   <span className="font-semibold not-italic">Note:</span> {e.notes}
                                 </div>
                               )}
-                              {e.status && <div className={`mt-2 inline-block px-2 py-1 text-xs font-medium rounded-full ${e.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-700'}`}>{e.status}</div>}
+                              {e.status && <div className={`mt-2 inline-block px-2 py-1 text-xs font-medium rounded-full ${e.status === 'pending' ? 'bg-yellow-100 text-yellow-800' : e.status === 'request_change' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-700'}`}>{e.status.replace('_', ' ')}</div>}
 
                               {/* Edit Event Button for Authorized Users or Event Owner (Tutor) */}
                               {(hasAuthority || profile?.role === "academic_assistant" || (profile?.role === "tutor" && e.tutor === profile?.id)) && (
