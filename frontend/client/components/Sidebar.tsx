@@ -79,7 +79,7 @@ export default function Sidebar() {
       const fetchNotifications = async () => {
         try {
           // Use current profile/token
-          const token = localStorage.getItem("token");
+          const token = localStorage.getItem("accessToken");
           if (!token) return;
 
           const res = await fetch("http://127.0.0.1:8000/api/calendar/notifications/", {
@@ -87,6 +87,7 @@ export default function Sidebar() {
               "Authorization": `Bearer ${token}`
             }
           });
+
           if (res.ok) {
             const data = await res.json();
             setNotifications(data);

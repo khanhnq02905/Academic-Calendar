@@ -60,10 +60,6 @@ def _notify_related_users(event, action_description):
         if event.tutor:
              Actor = event.tutor.username
         
-        # If the action was literally performed by this staff member, we still notify them (as per user request "nothing shows up")
-        # Or message slightly differently? "You created..." vs "X created..."
-        # For now, uniform message is fine.
-        
         notif = Notification(
             user=staff,
             message=f"Event '{event.title}' ({event.course.name}) was {action_description}.", 
